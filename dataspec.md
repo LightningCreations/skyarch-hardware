@@ -14,8 +14,6 @@ Legend:
 * Inout: Both Input and Output behaviour
 * NC: Not Connected
 
-
-
 | Pin(s) | Name             | Direction | Behaviour | Description                                |
 |:------:|------------------|:---------:|:---------:|--------------------------------------------|
 | 0      | 5VCC             | Input     | N/A       | Main System Supply/Logic Reference Voltage |
@@ -33,16 +31,19 @@ Legend:
 | 68     | CLK              | Input     | Puil Down | System Reference Clock                     |
 | 69     | CCLK             | Output    | Active    | System Execution Clock                     |
 | 70-71  | S0-S1            | Output    | Active    | System Status                              |
-| 72-79  | CA0-7            | Input     | Pull Down | Coprocessor n available                    |
-| 80-87  | CE0-7            | Output    | Active    | Coprocessor n enabled                      |
-| 88-95  | CB0-7            | Input     | Float     | Coprocessor n busy                         |
-| 96-99  | EX0-3            | Input     | Pull Down | Exception/NMI Trigger                      |
-| 100-103| IRQ0-3           | Input     | Pull Down | IRQ Trigger                                |
-| 104    | RESET            | Input     | Pull Down | External Reset                             |
-| 105    | IM               | Output    | Active    | Interrupts Masked                          |
-| 106-110| NC               | NC        | Float     | Not Connected                              |
-| 111    | GND              | Input     | N/A       | Main System Ground/Logic Reference Ground  |
-
+| 72-75  | CA0-3            | Input     | Pull Down | Coprocessor n available                    |
+| 76-79  | CE0-3            | Output    | Active    | Coprocessor n enabled                      |
+| 80-83  | CB0-3            | Input     | Float     | Coprocessor n busy                         |
+| 84-87  | EX0-3            | Input     | Pull Down | Exception/NMI Trigger                      |
+| 88-91  | IRQ0-3           | Input     | Pull Down | IRQ Trigger                                |
+| 92     | RESET            | Input     | Pull Down | External Reset                             |
+| 93     | IM               | Output    | Active    | Interrupts Masked                          |
+| 94     | NC               | NC        | Float     | Not Connected                              |
+| 95     | GND              | Input     | N/A       | Main System Ground/Logic Reference Ground  |
+| 96-99  | CA4-7            | Input     | Pull Down | Coprocessor n available                    |
+| 100-103| CE4-7            | Output    | Active    | Coprocessor n enabled                      |
+| 104-107| CB4-7            | Input     | Float     | Coprocessor n busy                         |
+| 108-111| NC               | NC        | Float     | Not Connected                              |
 
 ## Clock
 
@@ -106,6 +107,10 @@ Coprocessor registers are identified by A0-4. The Coprocessor to access is ident
 As a special case for Writes, An address of 100000 (A5=1, A0-4=0) accesses the Coprocessor Control Register (visible for Coprocessor N as Map 6, Register N)
 A5 is not used for reads, and any other values of A0-4 with A5=1 are invalid.
 
+### Co-processor Execution
+
+A Coprocessor Write with CX=1 is an instruction execution. A0-4 are set to 0. The lower 8 bits of the Data contains the function number, and the upper 24 bits contains the payload. 
+
 ### LOCK and External BE
 
 The BE pin is IO to allow multiple devices (including coprocessors and other Micron CPUs) to share the same bus for basic operations without complicated coherency logic. While BE is brought high externally, the Micron CPU will not attempt to perform any bus accesses or coprocessor instruction dispatches. Instead, the CPU will wait on them until BE becomes low.
@@ -114,7 +119,11 @@ The LOCK pin is a specialized pin for supporting atomic memory accesses. When LO
 
 ### Primitive Read-Modify-Writes
 
-When reading main memory (IO=0, W=0), after BA becomes High, the CPU may set W=1 at the immediately following rising edge (Cycle N+1). If so, it places data to write on the bus at the falling edge of that cycle. 
+When reading main memory (IO=0, W=0), after BA becomes High, the CPU may set W=1 at the immediately following rising edge (Cycle N+1). If so, it places data to write on the bus at the falling edge of that cycle.
+
+### Coprocessor Available/Enabled/Busy
+
+
 
 ## Exceptions and IRQs
 
