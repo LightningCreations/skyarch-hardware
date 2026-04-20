@@ -1,5 +1,5 @@
 
-# Micron CPU Datasheet
+# Skyarch CPU Datasheet
 
 ## Pinout
 
@@ -43,7 +43,10 @@ Legend:
 | 96-99  | CA4-7            | Input     | Pull Down | Coprocessor n available                    |
 | 100-103| CE4-7            | Output    | Active    | Coprocessor n enabled                      |
 | 104-107| CB4-7            | Input     | Float     | Coprocessor n busy                         |
-| 108-111| NC               | NC        | Float     | Not Connected                              |
+| 108-126| NC               | NC        | Float     | Not Connected                              |
+| 127    | GND              | Input     | N/A       | Main System Ground/Logic Reference Ground  |
+
+Pin 127 and 95 are internally connected together. 
 
 ## Clock
 
@@ -123,7 +126,7 @@ When reading main memory (IO=0, W=0), after BA becomes High, the CPU may set W=1
 
 ### Coprocessor Available/Enabled/Busy
 
-
+For each coprocessor there is 
 
 ## Exceptions and IRQs
 
