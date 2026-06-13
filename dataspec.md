@@ -43,10 +43,47 @@ Legend:
 | 96-99  | CA4-7            | Input     | Pull Down | Coprocessor n available                    |
 | 100-103| CE4-7            | Output    | Active    | Coprocessor n enabled                      |
 | 104-107| CB4-7            | Input     | Float     | Coprocessor n busy                         |
-| 108-126| NC               | NC        | Float     | Not Connected                              |
+| 108-111| WM0-3            | Output    | Pull Down | Write Mask (0-3)                           |
+| 112-126| NC               | NC        | Float     | Not Connected                              |
 | 127    | GND              | Input     | N/A       | Main System Ground/Logic Reference Ground  |
 
-Pin 127 and 95 are internally connected together. 
+Pin 127 and 95 are internally connected together to form a common ground.
+
+## Power Characteristics
+
+The main logic current is supplied on pin 0. The pin requires 5V (TODO, specify effective range) relative to ground (pins 95 and 127).
+
+The Logic reference ground is provided on pin 95 and ping 127. Only one pin is required to be connected to 0V. If both are connected, they must exhibit 0V relative to each other, as they are tied together internally. If only one pin is connected, the other can be used as a 0V Reference out.
+
+## Power On Status
+
+When the CPU becomes powered (5V on 5VCC, 0V on GND), the CPU is intiailized to an internally consistent state that exhibits at least the following properties:
+
+* CE0-7 are 0
+* BE is not powered
+* S0-1 is `0b11`
+
+After powering on the CPU in this state, the RESET pin must be brought high for a minimum of 2 clock cycles, before the CPU begins executing the Skyarch instruction set.
+
+## Reset
+
+A RESET is performed by bringing the RESET pin high. If the CPU already has S0-1=11, this must be held for a minimum of two cycles. If either status bit has any other value, it must be held until S0-1=11, and then for a minimum of two additional cycles. Once S0-1 have both become high, they will remain high as long as RESET is asserted. The CPU will not finish the RESET until the RESET pin is brought low.
+
+The After a RESET (including a RESET from power on) the CPU is placed in the following architectural state:
+
+* `IP=0`
+* `ictl.m=0, ictl.a=0`
+* `cpe=0`
+* `cpa[0:7]=CA0-7, cpa[8:]=0`
+* All other registers have undefined values. These values are electrically stable.
+
+Additionally, the CPU is placed in a valid, neutral state, with the following properties:
+
+* S0-1 is `0b00`
+* CE0-7 are 0
+* BE is not powered
+
+A RESET also occurs if the processor executes an instruction that raises a priority 1 or priority 0 exception while `ictl.a=1`.
 
 ## Clock
 
@@ -62,11 +99,11 @@ The CPU Clock is controlled by the CLK pin. While the CPU is Active (S0-1=00), t
 | 1  | 0 | 0  | 0  | x  | A0-29*4    | 32    | Main Memory Read     |
 | 1  | 1 | 0  | 0  | x  | A0-29*4    | 32    | Main Memory Write    |
 | 1  | 0 | 0  | 1  | x  | A0-29*4    | 32    | Memory Read (Instruction Fetch) |
-| 1  | 0 | 1  | 0  | 0  | A0-19      | W0-4  | I/O Port Read |
-| 1  | 1 | 1  | 0  | 0  | A0-19      | W0-4  | I/O Port Write |
-| 1  | 0 | 1  | 1  | 0  | N0-3:A0-4* | 32    | Coprocessor Register Read |
-| 1  | 1 | 1  | 1  | 0  | N0-3:A0-5* | 32    | Coprocessor Register Write |
-| 1  | 1 | 1  | 1  | 1  | N0-3       | 32    | Coprocessor Register Execute |
+| 1  | 0 | 1  | 0  | x  | A0-19      | W0-4  | I/O Port Read |
+| 1  | 1 | 1  | 0  | x  | A0-19      | W0-4  | I/O Port Write |
+| 1  | 0 | 1  | 1  | 0  | N0-7:A0-4* | 32    | Coprocessor Register Read |
+| 1  | 1 | 1  | 1  | 0  | N0-7:A0-5* | 32    | Coprocessor Register Write |
+| 1  | 1 | 1  | 1  | 1  | N0-7       | 32    | Coprocessor Register Execute |
 
 All unused bits of A0-29 are set to 0.
 
@@ -74,22 +111,24 @@ All unused bits of A0-29 are set to 0.
 
 The lower Width bits of the Data bus contain the salient data, other bits are Connected to a Pull Down Resistor.
 
-BE is an IO pin that controls whether or not the Bus is in use. When not set to 1 by the CPU, it is connected to a pull down resistor. 
+BE is an IO pin that controls whether or not the Bus is in use. When not set to 1 by the CPU, it is connected to a pull down resistor.
 
-When BE is not set by the CPU, all other bits are unconnected, except for Data, which is connected to a pull down resistor.
+When BE is not set by the CPU, all other bits are unconnected, except for Data and WM, which are connected to a pull down resistor.
 
 The BA signal is used to indicate when read operations are completed. A bus read is aborted (BA is not set) if EX=1 is set.
 Write operations are expected to be received no later than the 4th cycle since BE became High.
 
 Combination not specified above is treated as invalid and are not produced in current versions of the bus.
 
+WM0-3 controls the bytes in the output that are written back to memory. They are not used for read transfers. If WMn is set during a write cycle, the corresponding byte in the written word should not be written back to memory. WM may be ignored for memory mapped devices, and are not used when W=0 or IO=1. The contents of the data pins for a given byte that is masked is unspecified, but connected.
+
 ### Bus Transfer Protocol
 
 The following timing protocol is used for data transfer:
 * Cycle 0(RE): CPU sets BE=1,
-* Cycle 0(FE): Address lines, Data lines (for writes), W, IO, and SC become available
-* Cycle 1(FE): Data and Address, W, IO, and SC lines latched by downstream,
-* Cycle 2(RE): Data, IO, and SC lines become unavailable (may not contain salient values),
+* Cycle 0(FE): Address lines, Data lines (for writes), W, WM, IO, and SC become available
+* Cycle 1(FE): Data and Address, W, WM, IO, and SC lines latched by downstream,
+* Cycle 2(RE): Data, IO, WM, SC lines become unavailable (may not contain salient values),
 * Cycle N(RE) (W=0): Downstream sets BA=1
 * Cycle N(FE) (W=0): CPU latches Data from downstream.
 * Cycle N(FE): Earliest Cycle for CPU to set BE=0.
@@ -105,7 +144,7 @@ If, during an initial Memory Read, the CPU performs an immediate write with the 
 
 ### Coprocessor Transfer Address
 
-Coprocessor registers are identified by A0-4. The Coprocessor to access is identified by N0-1. 
+Coprocessor registers are identified by A0-4. The Coprocessor to access is identified by N0-4.
 
 As a special case for Writes, An address of 100000 (A5=1, A0-4=0) accesses the Coprocessor Control Register (visible for Coprocessor N as Map 6, Register N)
 A5 is not used for reads, and any other values of A0-4 with A5=1 are invalid.
@@ -118,7 +157,7 @@ A Coprocessor Write with CX=1 is an instruction execution. A0-4 are set to 0. Th
 
 The BE pin is IO to allow multiple devices (including coprocessors and other Micron CPUs) to share the same bus for basic operations without complicated coherency logic. While BE is brought high externally, the Micron CPU will not attempt to perform any bus accesses or coprocessor instruction dispatches. Instead, the CPU will wait on them until BE becomes low.
 
-The LOCK pin is a specialized pin for supporting atomic memory accesses. When LOCK is high, the Micron CPU will not attempt to perform any memory accesses, other than instruction fetches. The LOCK pin does not control I/O port accesses or coprocessor register accesses. It also does not block instruction fetches. LOCK is an output pin because it may be used as one in a future chip. Current Micron CPUs do not generate LOCK signals.
+The LOCK pin is a specialized pin for supporting atomic memory accesses. When LOCK is high, the Micron CPU will not attempt to perform any memory accesses, other than instruction fetches. The LOCK pin does not control I/O port accesses or coprocessor register accesses. It also does not block instruction fetches. LOCK is an output pin because it may be used as one in a future chip. Current Micron CPUs do not generate LOCK signals. Bus devices should nonetheless respect this signal
 
 ### Primitive Read-Modify-Writes
 
@@ -126,7 +165,7 @@ When reading main memory (IO=0, W=0), after BA becomes High, the CPU may set W=1
 
 ### Coprocessor Available/Enabled/Busy
 
-For each coprocessor there is 
+For each coprocessor there is a distinct Coprocessor Available/Coprocessor Enabled
 
 ## Exceptions and IRQs
 
@@ -153,10 +192,3 @@ The following values are permissible for the EX pin:
 | 1 | Waiting | Waiting on Co-processor |
 | 2 | Halted  | Stopped by Halt Instruction (Waiting for Interrupt) |
 | 3 | Stopped | Stopped by STOP instruction (Waiting for Reset) |
-
-## Reset
-
-Bring RESET High for Minimum of 2 Cycles to trigger a reset. S0-1=11 will indicate when the CPU is no longer busy, RESET brought low any time after this indication will trigger CPU Start up.
-The CPU is put into the state described by the ISA Specification. Additionally, S0-1 becomes 0 after at most 2 cycles.
-
-When the CPU Is powered on, the Status will be set to S0-1=11. RESET must be brought high for 2 cycles, then low.
